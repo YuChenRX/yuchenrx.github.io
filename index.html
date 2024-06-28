@@ -12,6 +12,19 @@
   <body>
     <div id="root" class="flex">
     </div>
+    <script>
+      // 检查 URL 中的重定向参数
+      var urlParams = new URLSearchParams(window.location.search);
+      var redirectPath = urlParams.get('p');
+      if (redirectPath) {
+        // 移除重定向参数
+        urlParams.delete('p');
+        var newSearch = urlParams.toString() ? '?' + urlParams.toString() : '';
+        var newUrl = window.location.origin + redirectPath + newSearch + window.location.hash;
+        // 重定向到正确的路径
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    </script>
 <!--    <script src="https://polyfill.io/v3/polyfill.min.js?features=default%2Cdom4%2Ces2015%2Ces2016%2Ces2017%2Ces2018%2Ces2019%2Ces2020%2Ces2021%2Ces2022%2Ces5%2Ces6%2Ces7"></script>-->
   </body>
 </html>

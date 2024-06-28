@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found</title>
+    <script>
+        // 获取当前 URL 路径
+        var path = window.location.pathname;
+        // 获取查询参数
+        var query = window.location.search;
+        // 获取 hash 值
+        var hash = window.location.hash;
+        // 重定向到应用的入口点，并附加当前路径、查询参数和 hash 值
+        window.location.href = '/' + (path !== '/' ? '?p=' + encodeURIComponent(path) : '') + query + hash;
+    </script>
+</head>
+<body>
+<h1>404 - Page Not Found</h1>
+<p>Redirecting to the homepage...</p>
+</body>
+</html>
