@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Player</title>
+    <style>
+      :root {
+        --bg: #f7f7f2;
+        --ink: #1b1b1b;
+        --muted: #666;
+        --accent: #ff7a00;
+        --card: #ffffff;
+        --line: #e8e3d7;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Georgia", "Times New Roman", serif;
+        background: linear-gradient(180deg, #fff6e6 0%, var(--bg) 60%);
+        color: var(--ink);
+      }
+      header {
+        padding: 32px 20px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        letter-spacing: 0.5px;
+      }
+      header p {
+        margin: 0;
+        color: var(--muted);
+      }
+      main {
+        padding: 20px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 6px;
+      }
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        font-family: inherit;
+      }
+      .btn-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: #fff;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--ink);
+      }
+      .status {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .item {
+        background: #fffdf7;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        display: grid;
+        gap: 8px;
+      }
+      .item img {
+        width: 100%;
+        border-radius: 10px;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+        background: #eee;
+      }
+      .item h3 {
+        margin: 0;
+        font-size: 16px;
+      }
+      .meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      audio {
+        width: 100%;
+        margin-top: 8px;
+      }
+      .footer {
+        margin-top: 18px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>B 站音乐播放器</h1>
+      <p>通过后端接口播放收藏夹音频，支持随机与流式播放。</p>
+    </header>
+    <main>
+      <div class="panel">
+        <div class="controls">
+          <div>
+            <label for="apiBase">API Base（例如 http://localhost:3000）</label>
+            <input id="apiBase" placeholder="留空则使用当前域名" />
+          </div>
+          <div>
+            <label for="fid">收藏夹 fid</label>
+            <input id="fid" placeholder="输入收藏夹 ID" />
+          </div>
+          <div>
+            <label for="bvid">BVID（可选）</label>
+            <input id="bvid" placeholder="输入 BVID 直接播放" />
+          </div>
+          <div>
+            <label for="pageSize">列表数量 / 随机抽样数量</label>
+            <input id="pageSize" type="number" min="1" max="50" value="20" />
+          </div>
+        </div>
+        <div class="btn-row">
+          <button id="loadFav">加载收藏夹</button>
+          <button id="randomPlay">随机一首</button>
+          <button id="playDirect" class="secondary">播放 BVID</button>
+        </div>
+        <p class="status" id="status">等待操作。</p>
+      </div>
+
+      <div class="panel" style="margin-top: 18px;">
+        <h2 style="margin: 0 0 10px;">正在播放</h2>
+        <div id="nowPlaying" class="meta">暂无</div>
+        <audio id="player" controls preload="metadata"></audio>
+      </div>
+
+      <div class="grid" id="list"></div>
+      <div class="footer">提示：播放地址来自后端 `/music/bv/:bvid`，浏览器会自动进行 Range 请求。</div>
+    </main>
+
+    <script>
+      const apiBaseInput = document.getElementById('apiBase');
+      const fidInput = document.getElementById('fid');
+      const bvidInput = document.getElementById('bvid');
+      const pageSizeInput = document.getElementById('pageSize');
+      const listEl = document.getElementById('list');
+      const statusEl = document.getElementById('status');
+      const player = document.getElementById('player');
+      const nowPlaying = document.getElementById('nowPlaying');
+
+      const savedBase = localStorage.getItem('music_api_base') || '';
+      apiBaseInput.value = savedBase;
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function baseUrl() {
+        const raw = apiBaseInput.value.trim();
+        if (!raw) return '';
+        localStorage.setItem('music_api_base', raw);
+        return raw.replace(/\/$/, '');
+      }
+
+      function apiUrl(path) {
+        const base = baseUrl();
+        return base ? base + path : path;
+      }
+
+      async function fetchJson(path) {
+        const res = await fetch(apiUrl(path));
+        if (!res.ok) {
+          throw new Error(`请求失败: ${res.status}`);
+        }
+        return res.json();
+      }
+
+      function renderItems(items) {
+        listEl.innerHTML = '';
+        if (!items.length) {
+          listEl.innerHTML = '<div class="meta">没有数据。</div>';
+          return;
+        }
+        items.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'item';
+          card.innerHTML = `
+            <img src="${item.cover || ''}" alt="" />
+            <h3>${item.title || '未命名'}</h3>
+            <div class="meta">${item.author || '未知'} · ${item.durationStr || ''}</div>
+            <div class="meta">播放量 ${item.playCount ?? 0}</div>
+            <button class="secondary">播放</button>
+          `;
+          card.querySelector('button').addEventListener('click', () => {
+            playBvid(item.bvid, item.title, item.author);
+          });
+          listEl.appendChild(card);
+        });
+      }
+
+      function playBvid(bvid, title, author) {
+        if (!bvid) {
+          setStatus('缺少 BVID。');
+          return;
+        }
+        const url = apiUrl(`/music/bv/${bvid}`);
+        player.src = url;
+        player.play().catch(() => {});
+        nowPlaying.textContent = `${title || bvid} · ${author || ''}`;
+        setStatus(`正在播放 ${bvid}`);
+      }
+
+      document.getElementById('loadFav').addEventListener('click', async () => {
+        const fid = fidInput.value.trim();
+        if (!fid) {
+          setStatus('请输入收藏夹 fid。');
+          return;
+        }
+        const pageSize = Number(pageSizeInput.value) || 20;
+        setStatus('加载中...');
+        try {
+          const data = await fetchJson(`/music/${fid}?pageNum=1&pageSize=${pageSize}`);
+          renderItems(data.data || []);
+          setStatus(`加载完成，共 ${data.pagination?.total ?? data.data?.length ?? 0} 条。`);
+        } catch (error) {
+          setStatus(`加载失败：${error.message}`);
+        }
+      });
+
+      document.getElementById('randomPlay').addEventListener('click', async () => {
+        const fid = fidInput.value.trim();
+        if (!fid) {
+          setStatus('请输入收藏夹 fid。');
+          return;
+        }
+        const pageSize = Number(pageSizeInput.value) || 20;
+        setStatus('随机获取中...');
+        try {
+          const data = await fetchJson(`/music/random/${fid}?pageSize=${pageSize}`);
+          const item = data.data;
+          if (item) {
+            playBvid(item.bvid, item.title, item.author);
+          }
+        } catch (error) {
+          setStatus(`随机失败：${error.message}`);
+        }
+      });
+
+      document.getElementById('playDirect').addEventListener('click', () => {
+        const bvid = bvidInput.value.trim();
+        if (!bvid) {
+          setStatus('请输入 BVID。');
+          return;
+        }
+        playBvid(bvid);
+      });
+    </script>
+  </body>
+</html>
